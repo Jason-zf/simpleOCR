@@ -65,6 +65,8 @@ BEGIN_MESSAGE_MAP(CsimpleOCRDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON_OPEN_PIC, &CsimpleOCRDlg::OnBnClickedButtonOpenPic)
+	ON_BN_CLICKED(IDC_BUTTON_SPLIT_CHARACTER, &CsimpleOCRDlg::OnBnClickedButtonSplitCharacter)
+	ON_BN_CLICKED(IDC_BUTTON_OCR, &CsimpleOCRDlg::OnBnClickedButtonOcr)
 END_MESSAGE_MAP()
 
 
@@ -354,4 +356,185 @@ BOOL CsimpleOCRDlg::PreTranslateMessage(MSG* pMsg)
 	}
 
 	return CDialogEx::PreTranslateMessage(pMsg);
+}
+
+
+void CsimpleOCRDlg::splitCharacter(const map<int, Mat>& srcImg, map<int, vector<Mat>>& dstImg, map<int, map<int, Rect>>& m)
+{
+	if (srcImg.empty())
+	{
+		return;
+	}
+	for (int i = 0; i < srcImg.size(); i++)
+	{
+		Mat color = srcImg.at(i);
+		Mat gray;
+		vector<Mat> imgROI;
+		map<int, Rect> mRect;
+		cvtColor(color, gray, COLOR_BGR2GRAY);
+		threshold(gray, gray, THRESH_MIN, 255, THRESH_BINARY_INV);
+		/*vector<vector<Point>> *contours = new vector<vector<Point>>[6];*/
+		vector<vector<Point>> contours;
+		if (!gray.empty())
+		{
+			findContours(gray, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE, Point(0, 0));
+		}
+		for (int j = 0; j < contours.size(); j++)
+		{
+			Rect rectROI = boundingRect(contours.at(j));
+			rectROI.x -= 2;
+			rectROI.y -= 2;
+			rectROI.width += 4;
+			rectROI.height += 4;
+			mRect.insert(pair<int, Rect>(j, rectROI));
+		}
+		/*通过findContours函数找出的轮廓并不一定是按照字母的原顺序，因此应该重新排序*/
+		for (size_t i = 0; i < mRect.size(); i++)
+		{
+			for (size_t j = i; j < mRect.size(); j++)
+			{
+				if (mRect[i].x < mRect[j].x)
+				{
+					Rect temp = mRect[i];
+					mRect[i] = mRect[j];
+					mRect[j] = temp;
+				}
+			}
+		}
+		for (size_t i = 0; i < mRect.size(); i++)
+		{
+			Mat colorROI = color(mRect[i]);
+			/*存储字母时顺序是按照从低位到高位顺序存储*/
+			imgROI.push_back(colorROI);
+		}
+		m.insert(pair<int, map<int, Rect>>(i, mRect));
+		dstImg.insert(pair<int, vector<Mat>>(i, imgROI));
+	}
+}
+
+void CsimpleOCRDlg::OnBnClickedButtonSplitCharacter()
+{
+	// TODO:  在此添加控件通知处理程序代码
+
+
+
+}
+
+void CsimpleOCRDlg::loadTemplate(map<int, Mat>& m)
+{
+	string path;
+	for (int i = 0; i < 11; i++)
+	{
+		char buff[10];
+		_itoa_s(i, buff, 10);
+		string temp = buff;
+		path = ".\\template\\T_" + (string)buff + ".jpg";
+		Mat image = imread(path);
+		m.insert(pair<int, Mat>(i, image));
+	}
+}
+
+void CsimpleOCRDlg::shapeMatch(const map<int, vector<Mat>>& imgROI, const map<int, Mat>& mTemplate, map<int, double>& result)
+{
+	for (int i = 0; i < imgROI.size(); i++)
+	{
+		vector<Mat> vecImg = imgROI.at(i);
+		double num = 0;
+		int scale = 10;
+		int flag = false;
+		for (int j = vecImg.size() - 1; j >= 0; j--)
+		{
+			Mat color = vecImg.at(j);
+			Mat gray;
+			map<double, int> cormes1, cormes2, cormes3;
+			cvtColor(color, gray, COLOR_BGR2GRAY);
+			threshold(gray, gray, THRESH_MIN, 255, THRESH_BINARY_INV);
+			vector<vector<Point>>contours1, contours2;
+			vector<Vec4i>hierarchy1, hierarchy2;
+			findContours(gray, contours1, hierarchy1, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0, 0));
+			for (int k = 0; k < mTemplate.size(); k++)
+			{
+				Mat templColor = mTemplate.at(k);
+				Mat templGray;
+				cvtColor(templColor, templGray, COLOR_BGR2GRAY);
+				threshold(templGray, templGray, THRESH_MIN, 255, THRESH_BINARY_INV);
+				findContours(templGray, contours2, hierarchy2, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0, 0));
+				if (contours2.size() == contours1.size())
+				{
+					double buff1 = matchShapes(contours1[0], contours2[0], CV_CONTOURS_MATCH_I1, 0.0);
+					cormes1.insert(pair<double, int>(buff1, k));
+				}
+
+			}
+			map<double, int>::iterator it = cormes1.begin();
+			if (flag == true)
+			{
+				num = num + (double)it->second / scale;
+				scale *= 10;
+			}
+			else
+			{
+				if (it->second == 10)
+				{
+					flag = true;
+				}
+				else
+				{
+					num = num * 10 + it->second;
+				}
+			}
+		}
+		result.insert(pair<int, double>(i, num));
+	}
+}
+
+/*字符转换*/
+wstring num2string(double num)
+{
+	wostringstream ostr;
+	ostr << num;
+	return ostr.str();
+}
+
+void CsimpleOCRDlg::OnBnClickedButtonOcr()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	map<int, Mat> imgROI;
+	map<int, vector<Mat>> imgROI2Segment;
+	map<int, map<int, Rect>> map2Segment;
+	map<int, vector<Mat>> segmentDescriptor;
+	map<int, Mat> templateDescriptor;
+	map<int, Mat> mTemplate;
+	/*输出结果到result.txt文件中*/
+	ofstream out(".\\result\\result.txt");
+	if (!out)
+	{
+		return;
+	}
+	/*加载模板*/
+	loadTemplate(mTemplate);
+	if (m_srcImg.empty() || m_mROI.empty())
+	{
+		return;
+	}
+	for (map<int, Rect>::iterator it = m_mROI.begin(); it != m_mROI.end(); it++)
+	{
+		Mat temp;
+		temp = m_srcImg(it->second);
+		imgROI.insert(pair<int, Mat>(it->first, temp));
+	}
+	splitCharacter(imgROI, imgROI2Segment, map2Segment);
+	map<int, double>result1, result2;
+	shapeMatch(imgROI2Segment, mTemplate, result2);
+	out << "标号" << setw(10) << "识别结果" << endl;
+	for (size_t i = 0; i < result2.size(); i++)
+	{
+		wstring str = num2string(i);
+		m_listShowResult.InsertItem(i, str.c_str());
+		//m_listShow.SetItemText(i, 1, str.c_str());
+		str = num2string(result2.at(i));
+		m_listShowResult.SetItemText(i, 1, str.c_str());
+		out << i << setw(10 + 2 - sizeof(i) / sizeof(int)) << result2.at(i) << endl;
+	}
+	out.close();
 }

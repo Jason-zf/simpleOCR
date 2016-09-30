@@ -81,4 +81,6 @@ public:
 	CStaticShowImage m_staticShowPic;
 	afx_msg void OnBnClickedButtonOpenPic();
 	virtual BOOL PreTranslateMessage(MSG* pMsg);	
+	afx_msg void OnBnClickedButtonSplitCharacter();
+	afx_msg void OnBnClickedButtonOcr();
 };
