@@ -7,6 +7,9 @@
 #include "simpleOCRDlg.h"
 #include "afxdialogex.h"
 
+#include <cstdlib>
+#include "myTools/CvtString.h"
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -58,6 +61,7 @@ void CsimpleOCRDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_LIST1, m_listShowResult);
 	DDX_Control(pDX, IDC_STATIC_SHOW_PIC, m_staticShowPic);
+	DDX_Control(pDX, IDC_EDIT_ROI_NUM, m_editROINum);
 }
 
 BEGIN_MESSAGE_MAP(CsimpleOCRDlg, CDialogEx)
@@ -67,6 +71,9 @@ BEGIN_MESSAGE_MAP(CsimpleOCRDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_OPEN_PIC, &CsimpleOCRDlg::OnBnClickedButtonOpenPic)
 	ON_BN_CLICKED(IDC_BUTTON_SPLIT_CHARACTER, &CsimpleOCRDlg::OnBnClickedButtonSplitCharacter)
 	ON_BN_CLICKED(IDC_BUTTON_OCR, &CsimpleOCRDlg::OnBnClickedButtonOcr)
+	ON_BN_CLICKED(IDC_BUTTON_CLEAR_ALL, &CsimpleOCRDlg::OnBnClickedButtonClearAll)
+//	ON_WM_TIMER()
+ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -95,7 +102,6 @@ BOOL CsimpleOCRDlg::OnInitDialog()
 			pSysMenu->AppendMenu(MF_STRING, IDM_ABOUTBOX, strAboutMenu);
 		}
 	}
-
 	// 设置此对话框的图标。  当应用程序主窗口不是对话框时，框架将自动
 	//  执行此操作
 	SetIcon(m_hIcon, TRUE);			// 设置大图标
@@ -107,6 +113,9 @@ BOOL CsimpleOCRDlg::OnInitDialog()
 	m_listShowResult.InsertColumn(1, L"识别结果", LVCFMT_LEFT, 200, 1);
 	key = 0;
 	flag = false;
+	m_numofROI = 3;	
+	m_isTimerAlive = false;
+	m_nRows = 0;
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -175,9 +184,9 @@ void CsimpleOCRDlg::OnBnClickedButtonOpenPic()
 	m_srcImg = imread(str);
 	if (!m_srcImg.empty())
 	{
-		m_srcImg.copyTo(m_tempImg);
-		initROI(m_tempImg, m_mROI);
-		m_staticShowPic.showPic(m_tempImg);
+		m_srcImg.copyTo(m_tempImg);		
+		SetTimer(1, 40, NULL);
+		m_isTimerAlive = true;
 	}
 }
 
@@ -190,7 +199,7 @@ void CsimpleOCRDlg::initROI(Mat& tempImg, map<int, Rect>& mROI)
 		return;
 	}
 	y = tempImg.rows / 2;
-	for (int i = 0; i < ROI_NUM; i++)
+	for (int i = 0; i < m_numofROI; i++)
 	{
 		x += ROI_WIDTH * 2;
 		Rect tempRect = Rect(x, y, ROI_WIDTH, ROI_HEIGHT);
@@ -305,12 +314,20 @@ void CsimpleOCRDlg::mouseMove()
 		map<int, Rect>::iterator it = m_mROI.find(key);
 		it->second.x = point.x;
 		it->second.y = point.y;
+		if (m_isTimerAlive == true)
+		{
+			KillTimer(1);
+			initROI(m_tempImg, m_mROI);
+			m_staticShowPic.showPic(m_tempImg);
+			m_isTimerAlive = false;
+		}
 	}
 	for (map<int, Rect>::iterator it = m_mROI.begin(); it != m_mROI.end(); it++)
 	{
 		rectangle(m_tempImg, it->second, Scalar(0, 0, 255), 1, 8);
 	}
 	m_staticShowPic.showPic(m_tempImg);
+
 }
 
 BOOL CsimpleOCRDlg::PreTranslateMessage(MSG* pMsg)
@@ -319,7 +336,7 @@ BOOL CsimpleOCRDlg::PreTranslateMessage(MSG* pMsg)
 	switch (pMsg->message)
 	{
 	case WM_KEYDOWN:
-	{
+	{		
 		map<int, Rect>::iterator it = m_mROI.find(key);
 		if (it != m_mROI.end())
 		{
@@ -331,25 +348,28 @@ BOOL CsimpleOCRDlg::PreTranslateMessage(MSG* pMsg)
 		for (map<int, Rect>::iterator it = m_mROI.begin(); it != m_mROI.end(); it++)
 		{
 			rectangle(m_tempImg, it->second, Scalar(0, 0, 255), 1, 8);
-		}
-		m_staticShowPic.showPic(m_tempImg);
+		}	
+		m_staticShowPic.showPic(m_tempImg);		
 		break;
 	}
 	case WM_MOUSEMOVE:
 	{
 		if (pMsg->wParam == MK_LBUTTON)
-		{
+		{				
 			mouseMove();
 		}
 		else
 		{
 			flag = false;
-		}
+		}	
 		break;
 	}
 	case WM_LBUTTONDOWN:
-	{
-
+	{		
+	}
+	case WM_LBUTTONUP:
+	{			
+		break;
 	}
 	default:
 		break;
@@ -357,7 +377,6 @@ BOOL CsimpleOCRDlg::PreTranslateMessage(MSG* pMsg)
 
 	return CDialogEx::PreTranslateMessage(pMsg);
 }
-
 
 void CsimpleOCRDlg::splitCharacter(const map<int, Mat>& srcImg, map<int, vector<Mat>>& dstImg, map<int, map<int, Rect>>& m)
 {
@@ -415,7 +434,40 @@ void CsimpleOCRDlg::splitCharacter(const map<int, Mat>& srcImg, map<int, vector<
 void CsimpleOCRDlg::OnBnClickedButtonSplitCharacter()
 {
 	// TODO:  在此添加控件通知处理程序代码
+	map<int, Mat> srcSeqImg;
+	map<int, vector<Mat>> dstSeqImg;
+	map<int, map<int, Rect>> m;
+	string filePath;
+	string path;
+	for (int i = 0; i < m_mROI.size(); i++)
+	{
+		Mat temp = m_srcImg(m_mROI.at(i));
+		if (!temp.empty())
+		{
+			srcSeqImg.insert(pair<int, Mat>(i, temp));
+		}
+	}
+	splitCharacter(srcSeqImg, dstSeqImg, m);
+	/*存储模板地址*/
+	filePath = filePath = ".\\template\\temp\\";
+	for (map<int, vector<Mat>>::iterator it = dstSeqImg.begin(); it != dstSeqImg.end(); it++)
+	{
+		char buffer[10];
+		_itoa_s(it->first, buffer, 10);
+		string fileName = buffer;
+		path = filePath + "T_" + buffer + "_";
+		for (int i = 0; i < it->second.size(); i++)
+		{
+			char temp[10];
+			_itoa_s(i, temp, 10);
+			path = filePath + "T_" + buffer + "_" + temp + ".jpg";
+			Mat color = it->second.at(i);
+			Mat gray;
+			cvtColor(color, gray, COLOR_BGR2GRAY);
+			imwrite(path, gray);
 
+		}
+	}
 
 
 }
@@ -461,8 +513,14 @@ void CsimpleOCRDlg::shapeMatch(const map<int, vector<Mat>>& imgROI, const map<in
 				findContours(templGray, contours2, hierarchy2, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0, 0));
 				if (contours2.size() == contours1.size())
 				{
-					double buff1 = matchShapes(contours1[0], contours2[0], CV_CONTOURS_MATCH_I1, 0.0);
-					cormes1.insert(pair<double, int>(buff1, k));
+					int buff =contours2[0].size()-contours1[0].size();	
+					buff = abs(buff);
+					if (buff<=5)
+					{
+						double buff1 = matchShapes(contours1[0], contours2[0], CV_CONTOURS_MATCH_I1, 0.0);
+						cormes1.insert(pair<double, int>(buff1, k));
+					}
+					
 				}
 
 			}
@@ -528,13 +586,51 @@ void CsimpleOCRDlg::OnBnClickedButtonOcr()
 	shapeMatch(imgROI2Segment, mTemplate, result2);
 	out << "标号" << setw(10) << "识别结果" << endl;
 	for (size_t i = 0; i < result2.size(); i++)
-	{
-		wstring str = num2string(i);
-		m_listShowResult.InsertItem(i, str.c_str());
-		//m_listShow.SetItemText(i, 1, str.c_str());
-		str = num2string(result2.at(i));
-		m_listShowResult.SetItemText(i, 1, str.c_str());
+	{		
+		CvtString cvtString;
+		wstring str;
+		str = cvtString.to_cstring<int>(i+m_nRows);
+		m_listShowResult.InsertItem(i+m_nRows, str.c_str());		
+		str = cvtString.to_cstring<double>(result2.at(i));
+		m_listShowResult.SetItemText(i+m_nRows, 1, str.c_str());
 		out << i << setw(10 + 2 - sizeof(i) / sizeof(int)) << result2.at(i) << endl;
 	}
+	m_nRows += result2.size();
 	out.close();
+}
+
+void CsimpleOCRDlg::OnBnClickedButtonClearAll()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	Mat image = Mat(Size(320, 240), CV_8U, Scalar(255, 255, 255));
+	image.copyTo(m_srcImg);
+	image.copyTo(m_tempImg);
+	m_staticShowPic.showPic(m_srcImg);
+	m_mROI.clear();
+}
+
+void CsimpleOCRDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO:  在此添加消息处理程序代码和/或调用默认值
+	switch (nIDEvent)
+	{
+	case 1:
+	{
+		CString str;
+		m_editROINum.GetWindowTextW(str);
+		CvtString cvtString;
+		int buff = cvtString.cstring_to<int>(str.GetString());
+		if (buff>0)
+		{
+			m_numofROI = buff;
+		}
+		m_srcImg.copyTo(m_tempImg);
+		initROI(m_tempImg, m_mROI);
+		m_staticShowPic.showPic(m_tempImg);
+		break;
+	}
+	default:
+		break;
+	}
+		CDialogEx::OnTimer(nIDEvent);
 }

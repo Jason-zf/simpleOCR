@@ -51,6 +51,11 @@ public:
 	map<int, Rect> m_mROI;
 	int key;
 	int flag;
+	int m_numofROI;
+	/*判断timer是否存在*/
+	bool m_isTimerAlive;
+	/*显示结果时的函数*/
+	int m_nRows;
 public:
 	/*
 	@初始化感兴趣区域
@@ -83,4 +88,8 @@ public:
 	virtual BOOL PreTranslateMessage(MSG* pMsg);	
 	afx_msg void OnBnClickedButtonSplitCharacter();
 	afx_msg void OnBnClickedButtonOcr();
+	afx_msg void OnBnClickedButtonClearAll();
+//	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	CEdit m_editROINum;
 };
