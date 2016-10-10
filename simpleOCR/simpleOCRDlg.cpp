@@ -115,7 +115,6 @@ BOOL CsimpleOCRDlg::OnInitDialog()
 	flag = false;
 	m_numofROI = 3;	
 	m_isTimerAlive = false;
-	m_nRows = 0;
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -423,6 +422,9 @@ void CsimpleOCRDlg::splitCharacter(const map<int, Mat>& srcImg, map<int, vector<
 		for (size_t i = 0; i < mRect.size(); i++)
 		{
 			Mat colorROI = color(mRect[i]);
+// 			rectangle(color, mRect[i], Scalar(0, 0, 255), 1, 8);
+// 			imshow("split", color);
+// 			waitKey();
 			/*存储字母时顺序是按照从低位到高位顺序存储*/
 			imgROI.push_back(colorROI);
 		}
@@ -546,17 +548,10 @@ void CsimpleOCRDlg::shapeMatch(const map<int, vector<Mat>>& imgROI, const map<in
 	}
 }
 
-/*字符转换*/
-wstring num2string(double num)
-{
-	wostringstream ostr;
-	ostr << num;
-	return ostr.str();
-}
-
 void CsimpleOCRDlg::OnBnClickedButtonOcr()
 {
 	// TODO:  在此添加控件通知处理程序代码
+	static int nRows = 0;
 	map<int, Mat> imgROI;
 	map<int, vector<Mat>> imgROI2Segment;
 	map<int, map<int, Rect>> map2Segment;
@@ -582,6 +577,7 @@ void CsimpleOCRDlg::OnBnClickedButtonOcr()
 		imgROI.insert(pair<int, Mat>(it->first, temp));
 	}
 	splitCharacter(imgROI, imgROI2Segment, map2Segment);
+	
 	map<int, double>result1, result2;
 	shapeMatch(imgROI2Segment, mTemplate, result2);
 	out << "标号" << setw(10) << "识别结果" << endl;
@@ -589,13 +585,13 @@ void CsimpleOCRDlg::OnBnClickedButtonOcr()
 	{		
 		CvtString cvtString;
 		wstring str;
-		str = cvtString.to_cstring<int>(i+m_nRows);
-		m_listShowResult.InsertItem(i+m_nRows, str.c_str());		
+		str = cvtString.to_cstring<int>(i+nRows);
+		m_listShowResult.InsertItem(i+nRows, str.c_str());		
 		str = cvtString.to_cstring<double>(result2.at(i));
-		m_listShowResult.SetItemText(i+m_nRows, 1, str.c_str());
+		m_listShowResult.SetItemText(i+nRows, 1, str.c_str());
 		out << i << setw(10 + 2 - sizeof(i) / sizeof(int)) << result2.at(i) << endl;
 	}
-	m_nRows += result2.size();
+	nRows += result2.size();
 	out.close();
 }
 

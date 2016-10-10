@@ -3,12 +3,6 @@
 //
 
 #pragma once
-
-#define ROI_NUM 3
-#define ROI_WIDTH 40
-#define ROI_HEIGHT 40
-#define  THRESH_MIN 70
-
 #include "afxwin.h"
 #include "afxcmn.h"
 
@@ -20,6 +14,11 @@
 #include <opencv.hpp>
 using namespace std;
 using namespace cv;
+
+const int ROI_NUM = 3;
+const int ROI_WIDTH = 40;
+const int ROI_HEIGHT = 40;
+const int THRESH_MIN = 70; 
 
 // CsimpleOCRDlg 对话框
 class CsimpleOCRDlg : public CDialogEx
@@ -55,7 +54,6 @@ public:
 	/*判断timer是否存在*/
 	bool m_isTimerAlive;
 	/*显示结果时的函数*/
-	int m_nRows;
 public:
 	/*
 	@初始化感兴趣区域
@@ -89,7 +87,6 @@ public:
 	afx_msg void OnBnClickedButtonSplitCharacter();
 	afx_msg void OnBnClickedButtonOcr();
 	afx_msg void OnBnClickedButtonClearAll();
-//	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	CEdit m_editROINum;
 };
